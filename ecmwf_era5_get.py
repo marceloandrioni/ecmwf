@@ -35,7 +35,7 @@ validate_types_in_func_call = validate_call(
 
 
 @validate_types_in_func_call
-def random_str(n: int = 6) -> str:
+def random_str(n: int = 8) -> str:
     sample_space = string.ascii_letters + string.digits
     return ''.join(random.choices(sample_space, k=n))
 
@@ -48,10 +48,11 @@ class Outfile:
             path: str | Path,
             overwrite: bool = False,
             use_temporary_file: bool = True,
+            delete_temporary_file_on_error = True,
     ) -> None:
         """
 
-        >>> with Outfile("~/some/dir/myfile.txt", overwrite=True) as outfile:
+        >>> with Outfile("~/some/dir/myfile.txt") as outfile:
         ...     with open(outfile) as fp:
         ...         print(f"Writing data to temporary file: {outfile}")
         ...         fp.write("Hello!")
@@ -59,22 +60,31 @@ class Outfile:
         """
 
         self.path = Path(path).expanduser().absolute()
-
-        if self.path.exists() and not overwrite:
-            raise ValueError(f"File {self.path} exists. You can pass `overwrite=True`.")
-
-        self.path.parent.mkdir(parents=True, exist_ok=True)
-
-        self._temp = (Path(f"{self.path}.tmp{random_str()}")
-                      if use_temporary_file
-                      else self.path)
+        self.overwrite = overwrite
+        self.use_temporary_file = use_temporary_file
+        self.delete_temporary_file_on_error = delete_temporary_file_on_error
 
     def __enter__(self) -> Path:
+
+        if self.path.exists() and not self.overwrite:
+            raise ValueError(f"File {self.path} exists.")
+
+        # create parent dir if it doesn't exist
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+
+        self._temp = self.path    
+        if self.use_temporary_file:
+            self._temp = self.path.with_suffix(f".tmp{random_str()}{self.path.suffix}")
+
         return self._temp
 
     def __exit__(self, exc_type, exc_val, exc_tb) -> None:
-        if exc_val is not None:
+
+        if exc_val is not None:                        
+            if self.delete_temporary_file_on_error:
+                path._temp.unlink()
             raise exc_val
+
         self._temp.rename(self.path)
 
 
@@ -157,7 +167,7 @@ def str_to_list_of_str(value: str) -> list[str]:
     return value
 
 
-def must_be_at_full_hour(value: datetime.datetime) -> datetime.datetime:
+def must_be_at_YYYYmmdd_HH0000(value: datetime.datetime) -> datetime.datetime:
     replace_kwargs = dict(minute=0, second=0, microsecond=0)
     cond = (value - value.replace(**replace_kwargs)).total_seconds() == 0.0
     assert cond, "datetime must be at full hour, e.g.: YYYY-mm-dd HH:00:00"
@@ -180,7 +190,7 @@ def build_request(
         dt_start: Annotated[
             datetime.datetime,
             BeforeValidator(must_be_naive_or_utc),
-            BeforeValidator(must_be_at_full_hour)
+            BeforeValidator(must_be_at_YYYYmmdd_HH0000)
         ],
         time_delta: Literal["hour", "day", "month", "year"],
         extent: tuple[

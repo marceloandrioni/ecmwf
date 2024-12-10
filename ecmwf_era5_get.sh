@@ -10,6 +10,10 @@ era5_get="$SCRIPT_DIR/ecmwf_era5_get.py"
 region="bra"
 extent=(-54 -31 -36 7)
 
+outdir_base="/u/eani/operational/datasets/ecmwf/era5_new/$region/raw"
+
+# group "name" and list of variables
+gvar="wind10"
 vars=("10m_u_component_of_wind" "10m_v_component_of_wind")
 
 dt="$dt_start"
@@ -20,8 +24,11 @@ while [[ $dt -le $dt_stop ]]; do
     year="`date --utc --date="$dt" +%Y`"
     month="`date --utc --date="$dt" +%m`"
 
-    outfile="/u/eani/operational/datasets/ecmwf/era5_new/$region/raw/$year/ecmwf_era5_wind10_$year${month}.nc"
-    [ -s $outfile ] && continue
+    outfile="$outdir_base/$year/ecmwf_era5_${gvar}_$year${month}.nc"
+    if [ -s $outfile ]; then
+        dt="`date --utc --date="$dt + $time_delta" +%Y%m%d`"    
+        continue
+    fi
 
     $era5_get \
         --variable ${vars[*]} \
@@ -30,7 +37,8 @@ while [[ $dt -le $dt_stop ]]; do
         --region_extent ${extent[*]} \
         --outfile "$outfile"
 
-    sleep 2s
+    echo "Waiting a few seconds for next request"
+    sleep 5s
 
     dt="`date --utc --date="$dt + $time_delta" +%Y%m%d`"
 
