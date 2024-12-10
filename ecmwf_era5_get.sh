@@ -26,6 +26,7 @@ while [[ $dt -le $dt_stop ]]; do
 
     outfile="$outdir_base/$year/ecmwf_era5_${gvar}_$year${month}.nc"
     if [ -s $outfile ]; then
+        echo "File $outfile exists, skipping."
         dt="`date --utc --date="$dt + $time_delta" +%Y%m%d`"    
         continue
     fi

@@ -12,6 +12,7 @@ import datetime
 from pathlib import Path
 import random
 import string
+import pprint
 
 from pydantic import validate_call, Field, BeforeValidator
 
@@ -156,7 +157,7 @@ def process_cli_args():
     # Note: must be a tuple so pydantic can check all elements individually
     setattr(args, "region_extent", tuple(args.region_extent))
 
-    print(args)
+    pprint.pp(args.__dict__, width=1)
 
     return args
 
