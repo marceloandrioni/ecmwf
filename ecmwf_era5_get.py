@@ -6,6 +6,7 @@ Download ERA5 data.
 
 import sys
 import argparse
+import requests
 import textwrap
 from typing import Annotated, Literal, Any
 import datetime
@@ -83,7 +84,7 @@ class Outfile:
 
         if exc_val is not None:                        
             if self.delete_temporary_file_on_error:
-                path._temp.unlink()
+                self._temp.unlink()
             raise exc_val
 
         self._temp.rename(self.path)
@@ -168,18 +169,60 @@ def str_to_list_of_str(value: str) -> list[str]:
     return value
 
 
-def must_be_at_YYYYmmdd_HH0000(value: datetime.datetime) -> datetime.datetime:
-    replace_kwargs = dict(minute=0, second=0, microsecond=0)
-    cond = (value - value.replace(**replace_kwargs)).total_seconds() == 0.0
-    assert cond, "datetime must be at full hour, e.g.: YYYY-mm-dd HH:00:00"
-    return value
+def get_dict_until(d: dict[Any, Any], key: Any) -> dict[Any, Any]:
+
+    # raise KeyError if key is not present
+    _ = d[key]
+
+    index = list(d).index(key)
+
+    keys = list(d)[0: index + 1]
+    values = list(d.values())[0: index + 1]
+
+    return {k: v for k, v in zip(keys, values)}
 
 
-def must_be_naive_or_utc(value: datetime.datetime) -> datetime.datetime:
-    cond = (value.tzinfo is None
-            or value.tzinfo.utcoffset(value) == datetime.timedelta(0))
+dt_replace_dict = dict(
+    microsecond=0,
+    second=0,
+    minute=0,
+    hour=0,
+    day=1,
+    month=1,
+)
+
+
+def raise_if_dt_is_not_floored_to_the_first(dt: datetime.datetime, units: str) -> None:
+    if (dt - dt.replace(**get_dict_until(dt_replace_dict, units))):
+        raise ValueError(f'datetime must be "floored" to the first {units}')
+    return dt
+    
+
+def dt_must_be_YYYYmmdd_HHMM00(dt: datetime.datetime) -> datetime.datetime:
+    return raise_if_dt_is_not_floored_to_the_first(dt, "second")
+
+
+def dt_must_be_YYYYmmdd_HH0000(dt: datetime.datetime) -> datetime.datetime:
+    return raise_if_dt_is_not_floored_to_the_first(dt, "minute")    
+
+
+def dt_must_be_YYYYmmdd_000000(dt: datetime.datetime) -> datetime.datetime:
+    return raise_if_dt_is_not_floored_to_the_first(dt, "hour")    
+
+
+def dt_must_be_YYYYmm01_000000(dt: datetime.datetime) -> datetime.datetime:
+    return raise_if_dt_is_not_floored_to_the_first(dt, "day")    
+
+
+def dt_must_be_YYYY0101_000000(dt: datetime.datetime) -> datetime.datetime:
+    return raise_if_dt_is_not_floored_to_the_first(dt, "month")    
+
+
+def dt_must_be_naive_or_utc(dt: datetime.datetime) -> datetime.datetime:
+    cond = (dt.tzinfo is None
+            or dt.tzinfo.utcoffset(value) == datetime.timedelta(0))
     assert cond, "datetime must be naive (can't have timezone info) or UTC"
-    return value
+    return dt
 
 
 @validate_types_in_func_call
@@ -190,8 +233,7 @@ def build_request(
         ],
         dt_start: Annotated[
             datetime.datetime,
-            BeforeValidator(must_be_naive_or_utc),
-            BeforeValidator(must_be_at_YYYYmmdd_HH0000)
+            BeforeValidator(dt_must_be_naive_or_utc),
         ],
         time_delta: Literal["hour", "day", "month", "year"],
         extent: tuple[
@@ -206,31 +248,22 @@ def build_request(
     day = [dt_start.day]
     month = [dt_start.month]
 
-    msg = "To download a full {}, the dt_start must be at {}"
-
     match time_delta:
 
-        case "hour":
-            if dt_start.strftime("%M") != "00":
-                raise ValueError(msg.format(time_delta, "YYYY-mm-dd HH:00"))
+        case "hour":           
+            dt_must_be_YYYYmmdd_HH0000(dt_start)
 
         case "day":
-            if dt_start.strftime("%H:%M") != "00:00":
-                raise ValueError(msg.format(time_delta, "YYYY-mm-dd 00:00"))
-
+            dt_must_be_YYYYmmdd_000000(dt_start)
             hour = list(range(24))
 
         case "month":
-            if dt_start.strftime("%d %H:%M") != "01 00:00":
-                raise ValueError(msg.format(time_delta, "YYYY-mm-01 00:00"))
-
+            dt_must_be_YYYYmm01_000000(dt_start)
             hour = list(range(24))
             day = list(range(1, 31))
 
         case "year":
-            if dt_start.strftime("%m-%d %H:%M") != "01-01 00:00":
-                raise ValueError(msg.format(time_delta, "YYYY-01-01 00:00"))
-
+            dt_must_be_YYYY0101_000000(dt_start)
             hour = list(range(24))
             day = list(range(1, 31))
             month = list(range(1, 13))
@@ -267,7 +300,7 @@ def get_data(
 
     client = cdsapi.Client()
 
-    with Outfile(path=outfile, overwrite=overwrite) as ofile:
+    with Outfile(path=outfile, overwrite=overwrite, delete_temporary_file_on_error=False) as ofile:
         print(f"Saving data to temporary file {ofile}")
         client.retrieve(dataset, request, ofile)
 
@@ -294,7 +327,7 @@ def main() -> None:
     print(request)
 
     dataset = "reanalysis-era5-single-levels"
-    get_data(dataset, request, outfile, overwrite)
+    # get_data(dataset, request, outfile, overwrite)
 
 
 if __name__ == "__main__":
