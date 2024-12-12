@@ -27,23 +27,35 @@ while [[ $dt -le $dt_stop ]]; do
     outfile="$outdir_base/$year/ecmwf_era5_${gvar}_${region}_${year}${month}.nc"
     if [ -s $outfile ]; then
         echo "File $outfile exists, skipping."
-        dt="`date --utc --date="$dt + $time_delta" +%Y%m%d`"    
+        dt="`date --utc --date="$dt + $time_delta" +%Y%m%d`"
         continue
     fi
 
-    $era5_get \
-        --variable ${vars[*]} \
-        --dt_start $dt \
-        --time_delta month \
-        --region_extent ${extent[*]} \
-        --outfile "$outfile"
+    for attempt in `seq 1 10`; do
+        echo "Attempt $attempt"
 
-    echo "Waiting a few seconds for next request"
-    sleep 5s
+        $era5_get \
+            --variable ${vars[*]} \
+            --dt_start $dt \
+            --time_delta month \
+            --region_extent ${extent[*]} \
+            --outfile "$outfile"
+
+        status=$?
+        if [[ "$status" -eq 0 ]]; then
+            echo "Attempt $attempt success"
+            echo "Waiting a few seconds for next request"
+            sleep 5s
+            break
+        else
+            echo "Waiting a few seconds for next attempt"
+            sleep 5m
+        fi
+
+    done
 
     dt="`date --utc --date="$dt + $time_delta" +%Y%m%d`"
 
 done
 
-echo "Done!"    
-
+echo "Done!"
