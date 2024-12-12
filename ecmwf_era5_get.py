@@ -386,7 +386,7 @@ class ERA5:
             print(f"Saving data to temporary file {ofile}")
             client.retrieve(self.dataset, request, ofile)
 
-            experiment = self.get_experiment_version(outfile)
+            experiment = self.get_experiment_version(ofile)
             print(experiment)
 
     @validate_types_in_func_call
