@@ -386,24 +386,24 @@ class ERA5:
             print(f"Saving data to temporary file {ofile}")
             client.retrieve(self.dataset, request, ofile)
 
-        experiment = self.get_experiment_version(outfile)
-        print(experiment)
+            experiment = self.get_experiment_version(outfile)
+            print(experiment)
 
     @validate_types_in_func_call
-    def get_experiment_version(self, outfile: Path) -> dict[str, Any]:
+    def get_experiment_version(self, outfile: Path) -> dict[str, str]:
 
         d = {
-            "ERA5": 1,   # this is the final version of era5 with lag of a few months
-            "ERA5T (interim)": 5,   # this is the interim (temporary) version with lag of a few days
+            "0001": "ERA5",   # this is the final version of era5 with lag of a few months
+            "0005": "ERA5T (interim)",   # this is the interim (temporary) version with lag of a few days
         }
 
         with xr.open_dataset(outfile) as ds:
 
-            for expname, expver in d.items():
-                if np.allclose(ds["expver"].values, expver):
-                    return {"expname": expname, "expver": expver}
+            for expver, expname in d.items():
+                if all([x == expver for x in ds["expver"].values]):
+                    return {"expver": expver, "expname": expname}
 
-        raise ValueError("Unkown dataset experiment.")
+        raise ValueError("Unkown dataset experiment")
 
 
 def main() -> None:
