@@ -408,20 +408,20 @@ class ERA5:
 
 def main() -> None:
 
-    # args = process_cli_args()
-    # variable = args.variable
-    # dt_start = args.dt_start
-    # time_delta = args.time_delta
-    # extent = args.region_extent
-    # outfile = args.outfile
-    # overwrite = args.overwrite
+    args = process_cli_args()
+    variable = args.variable
+    dt_start = args.dt_start
+    time_delta = args.time_delta
+    extent = args.region_extent
+    outfile = args.outfile
+    overwrite = args.overwrite
 
-    variable = ["10m_u_component_of_wind", "10m_v_component_of_wind"]
-    dt_start = datetime.datetime(2000, 1, 1)
-    time_delta = "month"
-    extent = (-54, -31, -36, 7)
-    outfile = Path(f"/tmp/ecmwf_era5_wind10_{dt_start:%Y%m%d}.nc")
-    overwrite = False
+    # variable = ["10m_u_component_of_wind", "10m_v_component_of_wind"]
+    # dt_start = datetime.datetime(2000, 1, 1)
+    # time_delta = "month"
+    # extent = (-54, -31, -36, 7)
+    # outfile = Path(f"/tmp/ecmwf_era5_wind10_{dt_start:%Y%m%d}.nc")
+    # overwrite = False
 
     era5 = ERA5(
         variable=variable,
