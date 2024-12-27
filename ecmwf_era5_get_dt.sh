@@ -1,7 +1,8 @@
 #!/bin/bash
 
 # Get era5 dt (delayed time, history) dataset. The user only needs to
-# set dt_start, dt_stop and dataset (era5 or era5t)
+# set dt_start, dt_stop, dataset (era5 or era5t), geographical region name
+# and extent.
 
 # group variable
 if [ -z "$1" ]; then
@@ -22,16 +23,15 @@ else
     dt_stop="20241130"
 fi
 
-time_delta="1 month"
+region="bra"
+extent=(-54 -31 -36 7)
 
 SCRIPT_DIR="$(dirname "$(readlink -f "$0")")"
 era5_get="$SCRIPT_DIR/ecmwf_era5_get.py"
 
-region="bra"
-extent=(-54 -31 -36 7)
-
 outdir_base="/u/eani/operational/datasets/ecmwf/$dataset/$region/raw"
 
+time_delta="1 month"
 dt="$dt_start"
 while [[ $dt -le $dt_stop ]]; do
 
