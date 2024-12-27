@@ -1,7 +1,20 @@
 #!/bin/bash
 
-dt_start="19900101"
-dt_stop="20231231"
+# group variable "name"
+if [ -z "$1" ]; then
+    echo "Usage: $0 <var>"
+    exit 1
+fi
+gvar="$1"
+
+# dataset="era5_new"   # final dataset with a lag of a few months
+# dt_start="19900101"
+# dt_stop="20231231"
+# time_delta="1 month"
+
+dataset="era5t"   # interim dataset with lag of a few days
+dt_start="20240101"
+dt_stop="20241130"
 time_delta="1 month"
 
 SCRIPT_DIR="$(dirname "$(readlink -f "$0")")"
@@ -10,10 +23,7 @@ era5_get="$SCRIPT_DIR/ecmwf_era5_get.py"
 region="bra"
 extent=(-54 -31 -36 7)
 
-outdir_base="/u/eani/operational/datasets/ecmwf/era5_new/$region/raw"
-
-# group variable "name"
-gvar="wave_part1"
+outdir_base="/u/eani/operational/datasets/ecmwf/$dataset/$region/raw"
 
 case $gvar in
     "bathymetry")
@@ -101,7 +111,7 @@ while [[ $dt -le $dt_stop ]]; do
     year="`date --utc --date="$dt" +%Y`"
     month="`date --utc --date="$dt" +%m`"
 
-    outfile="$outdir_base/$year/ecmwf_era5_${gvar}_${region}_${year}${month}.nc"
+    outfile="$outdir_base/$year/ecmwf_${dataset}_${gvar}_${region}_${year}${month}.nc"
     if [ -s $outfile ]; then
         echo "File $outfile exists, skipping."
         dt="`date --utc --date="$dt + $time_delta" +%Y%m%d`"

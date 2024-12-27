@@ -18,6 +18,7 @@ import string
 import pprint
 import numpy as np
 import xarray as xr
+from rich import print
 
 from pydantic import (validate_call, Field, BeforeValidator, AfterValidator,
                       AwareDatetime)
@@ -41,13 +42,13 @@ validate_types_in_func_call = validate_call(
 )
 
 
-class kwargs2instance:
+class kwargs2attrs:
 
     def __init__(self, **kwargs) -> None:
         self.__dict__.update(**kwargs)
 
     def __repr__(self) -> str:
-        return ('\n'.join(f'{k}: {v}' for k, v in self.__dict__.items()))
+        return pprint.pformat(self.__dict__)
 
 
 @validate_types_in_func_call
@@ -104,7 +105,119 @@ class Outfile:
         self._temp.rename(self.path)
 
 
+@validate_types_in_func_call
+def get_group_variables() -> dict[str, list[str]]:
+    """Return a dict with aliases that represent lists of variables."""
+
+    # Note: break "large" group variables (e.g. wave) in parts to make smaller
+    # API requests and do not spend too much time in queue
+
+    d = {
+
+        # non-time varying
+        "bathymetry": [
+            "model_bathymetry",
+            "land_sea_mask",
+        ],
+
+        "wind10": [
+            "10m_u_component_of_wind",
+            "10m_v_component_of_wind",
+         ],
+
+        "wind100": [
+            "100m_u_component_of_wind",
+            "100m_v_component_of_wind",
+        ],
+
+        "atm_part1": [
+            "2m_temperature",
+            "2m_dewpoint_temperature",
+        ],
+
+        "atm_part2": [
+            "mean_sea_level_pressure",
+            "surface_pressure",
+        ],
+
+        "atm_part3": [
+            "cloud_base_height",
+            "total_cloud_cover",
+        ],
+
+        # ERA5: How to calculate Obukhov Length
+        # https://confluence.ecmwf.int/display/CKB/ERA5%3A+How+to+calculate+Obukhov+Length
+        # "surface_pressure"
+        # "2m_dewpoint_temperature" OK
+        # "2m_temperature" OK
+        # "instantaneous_eastward_turbulent_surface_stress"
+        # "instantaneous_northward_turbulent_surface_stress"
+        # "instantaneous_moisture_flux"
+        # "instantaneous_surface_sensible_heat_flux"
+        # "standard_deviation_of_filtered_subgrid_orography"
+
+        # Hs
+        "wave_part1": [
+            "significant_height_of_combined_wind_waves_and_swell",
+            "significant_height_of_total_swell",
+            "significant_height_of_wind_waves",
+        ],
+
+        # Tp and Tm-1,0
+        "wave_part2": [
+            "peak_wave_period",
+            "mean_wave_period",
+            "mean_period_of_total_swell",
+            "mean_period_of_wind_waves",
+        ],
+
+        # Tm0,1
+        "wave_part3": [
+            "mean_wave_period_based_on_first_moment",
+            "mean_wave_period_based_on_first_moment_for_swell",
+            "mean_wave_period_based_on_first_moment_for_wind_waves",
+        ],
+
+        # Tm0,2
+        "wave_part4": [
+            "mean_zero_crossing_wave_period",
+            "mean_wave_period_based_on_second_moment_for_swell",
+            "mean_wave_period_based_on_second_moment_for_wind_waves",
+        ],
+
+        # Direction
+        "wave_part5": [
+            "mean_wave_direction",
+            "mean_direction_of_total_swell",
+            "mean_direction_of_wind_waves",
+        ],
+
+        # Directional width to calculate spreading
+        "wave_part6": [
+            "wave_spectral_directional_width",
+            "wave_spectral_directional_width_for_swell",
+            "wave_spectral_directional_width_for_wind_waves",
+        ],
+
+        # maximum individual wave
+        "wave_part7": [
+            "maximum_individual_wave_height",
+            "period_corresponding_to_maximum_individual_wave_height",
+        ],
+
+        # Stokes
+        "wave_part8": [
+            "u_component_stokes_drift",
+            "v_component_stokes_drift",
+        ]
+
+    }
+
+    return d
+
 def process_cli_args():
+
+    group_variables = get_group_variables()
 
     epilog = textwrap.dedent(fr"""
         Examples:
@@ -115,6 +228,14 @@ def process_cli_args():
            --time_delta day \
            --region_extent -54 -31 -36 7 \
            --outfile "/tmp/era5_wind_20000101.nc"
+
+        {sys.argv[0]} \
+           --group_variable wind10 \
+           --dt_start 20000101 \
+           --time_delta day \
+           --region_extent -54 -31 -36 7 \
+           --outfile "/tmp/era5_wind_20000101.nc"
+
     """)
 
     parser = argparse.ArgumentParser(
@@ -123,11 +244,18 @@ def process_cli_args():
         formatter_class=argparse.RawTextHelpFormatter,
     )
 
-    parser.add_argument(
+    group = parser.add_mutually_exclusive_group(required=True)
+
+    group.add_argument(
+        "--group_variable",
+        choices=group_variables.keys(),
+        help="Group variable",
+    )
+
+    group.add_argument(
         "--variable",
         nargs="+",
         help="Variable(s)",
-        required=True,
     )
 
     parser.add_argument(
@@ -172,7 +300,11 @@ def process_cli_args():
     # Note: must be a tuple so pydantic can check all elements individually
     setattr(args, "region_extent", tuple(args.region_extent))
 
-    pprint.pp(args.__dict__, width=1)
+    # if a group variable name was given, store the corresponding list of variables
+    if args.group_variable is not None:
+        setattr(args, "variable", group_varibles[args.group_variable])
+
+    print(args.__dict__)
 
     return args
 
@@ -331,7 +463,7 @@ class ERA5:
 
         return request
 
-    def get_dataset_description(self) -> kwargs2instance:
+    def get_dataset_description(self) -> kwargs2attrs:
 
         url = f"https://cds.climate.copernicus.eu/api/catalogue/v1/collections/{self.dataset}"
 
@@ -341,8 +473,8 @@ class ERA5:
         dt_start = dateutil.parser.isoparse(time_interval[0])
         dt_stop = dateutil.parser.isoparse(time_interval[1]) + datetime.timedelta(hours=23)
 
-        return kwargs2instance(**dict(dt_start=dt_start,
-                                      dt_stop=dt_stop))
+        return kwargs2attrs(**dict(dt_start=dt_start,
+                                   dt_stop=dt_stop))
 
     def _check_requested_time_interval(self) -> None:
         """Check if the user requested time interval (dt_start + delta_time) is
@@ -381,7 +513,7 @@ class ERA5:
 
         with Outfile(path=outfile,
                      overwrite=overwrite,
-                     delete_temporary_file_on_error=False) as ofile:
+                     delete_temporary_file_on_error=True) as ofile:
 
             print(f"Saving data to temporary file {ofile}")
             client.retrieve(self.dataset, request, ofile)
