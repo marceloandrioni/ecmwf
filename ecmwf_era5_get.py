@@ -109,6 +109,9 @@ class Outfile:
 def get_group_variables() -> dict[str, list[str]]:
     """Return a dict with aliases that represent lists of variables."""
 
+    # ATENTION: do not put atmospheric and wave variables in the same group,
+    # as they have different grid resolutions: 0.25 and 0.5, respectively.
+
     # Note: break "large" group variables (e.g. wave) in parts to make smaller
     # API requests and do not spend too much time in queue
 
@@ -255,7 +258,11 @@ def process_cli_args():
     group.add_argument(
         "--variable",
         nargs="+",
-        help="Variable(s)",
+        help=(
+            "Variable(s). ATENTION: do not request atmospheric and wave"
+            " variables simultaneously, as they have different grid"
+            " resolutions: 0.25 and 0.5, respectively."
+        )
     )
 
     parser.add_argument(
@@ -302,7 +309,7 @@ def process_cli_args():
 
     # if a group variable name was given, store the corresponding list of variables
     if args.group_variable is not None:
-        setattr(args, "variable", group_varibles[args.group_variable])
+        setattr(args, "variable", group_variables[args.group_variable])
 
     print(args.__dict__)
 
