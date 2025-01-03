@@ -15,6 +15,7 @@ import pytz
 from pathlib import Path
 import random
 import string
+import yaml
 import pprint
 import numpy as np
 import xarray as xr
@@ -107,116 +108,15 @@ class Outfile:
 
 @validate_types_in_func_call
 def get_group_variables() -> dict[str, list[str]]:
-    """Return a dict with aliases that represent lists of variables."""
+    """Return a dict with "group variables" definition. Basically, aliases that
+    represent multiple variables."""
 
-    # ATENTION: do not put atmospheric and wave variables in the same group,
-    # as they have different grid resolutions: 0.25 and 0.5, respectively.
+    gvars_file = Path(__file__).parent.resolve() / "ecmwf_era5_group_variables.yaml"
 
-    # Note: break "large" group variables (e.g. wave) in parts to make smaller
-    # API requests and do not spend too much time in queue
+    with open(gvars_file, "r") as f:
+        gvars = yaml.safe_load(f)
 
-    d = {
-
-        # non-time varying
-        "bathymetry": [
-            "model_bathymetry",
-            "land_sea_mask",
-        ],
-
-        "wind10": [
-            "10m_u_component_of_wind",
-            "10m_v_component_of_wind",
-         ],
-
-        "wind100": [
-            "100m_u_component_of_wind",
-            "100m_v_component_of_wind",
-        ],
-
-        "atm_part1": [
-            "2m_temperature",
-            "2m_dewpoint_temperature",
-        ],
-
-        "atm_part2": [
-            "mean_sea_level_pressure",
-            "surface_pressure",
-        ],
-
-        "atm_part3": [
-            "cloud_base_height",
-            "total_cloud_cover",
-        ],
-
-        # ERA5: How to calculate Obukhov Length
-        # https://confluence.ecmwf.int/display/CKB/ERA5%3A+How+to+calculate+Obukhov+Length
-        # "surface_pressure"
-        # "2m_dewpoint_temperature" OK
-        # "2m_temperature" OK
-        # "instantaneous_eastward_turbulent_surface_stress"
-        # "instantaneous_northward_turbulent_surface_stress"
-        # "instantaneous_moisture_flux"
-        # "instantaneous_surface_sensible_heat_flux"
-        # "standard_deviation_of_filtered_subgrid_orography"
-
-        # Hs
-        "wave_part1": [
-            "significant_height_of_combined_wind_waves_and_swell",
-            "significant_height_of_total_swell",
-            "significant_height_of_wind_waves",
-        ],
-
-        # Tp and Tm-1,0
-        "wave_part2": [
-            "peak_wave_period",
-            "mean_wave_period",
-            "mean_period_of_total_swell",
-            "mean_period_of_wind_waves",
-        ],
-
-        # Tm0,1
-        "wave_part3": [
-            "mean_wave_period_based_on_first_moment",
-            "mean_wave_period_based_on_first_moment_for_swell",
-            "mean_wave_period_based_on_first_moment_for_wind_waves",
-        ],
-
-        # Tm0,2
-        "wave_part4": [
-            "mean_zero_crossing_wave_period",
-            "mean_wave_period_based_on_second_moment_for_swell",
-            "mean_wave_period_based_on_second_moment_for_wind_waves",
-        ],
-
-        # Direction
-        "wave_part5": [
-            "mean_wave_direction",
-            "mean_direction_of_total_swell",
-            "mean_direction_of_wind_waves",
-        ],
-
-        # Directional width to calculate spreading
-        "wave_part6": [
-            "wave_spectral_directional_width",
-            "wave_spectral_directional_width_for_swell",
-            "wave_spectral_directional_width_for_wind_waves",
-        ],
-
-        # maximum individual wave
-        "wave_part7": [
-            "maximum_individual_wave_height",
-            "period_corresponding_to_maximum_individual_wave_height",
-        ],
-
-        # Stokes
-        "wave_part8": [
-            "u_component_stokes_drift",
-            "v_component_stokes_drift",
-        ]
-
-    }
-
-    return d
+    return gvars
 
 def process_cli_args():
 
@@ -335,7 +235,7 @@ def get_dict_until(d: dict[Any, Any], key: Any) -> dict[Any, Any]:
     return {k: v for k, v in zip(keys, values)}
 
 
-dt_replace_dict = dict(
+DT_REPLACE_DICT = dict(
     microsecond=0,
     second=0,
     minute=0,
@@ -350,7 +250,7 @@ def raise_if_dt_is_not_floored_to_the_first(
         units: str,
 ) -> datetime.datetime:
 
-    if (dt - dt.replace(**get_dict_until(dt_replace_dict, units))):
+    if (dt - dt.replace(**get_dict_until(DT_REPLACE_DICT, units))):
         raise ValueError(f'datetime must be "floored" to the first {units}')
     return dt
 

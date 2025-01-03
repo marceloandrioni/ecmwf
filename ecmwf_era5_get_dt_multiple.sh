@@ -6,6 +6,8 @@ gvars=(
     "atm_part1"
     "atm_part2"
     "atm_part3"
+    "atm_part4"
+    "atm_part5"
     "wave_part1"
     "wave_part2"
     "wave_part3"
