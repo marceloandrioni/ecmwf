@@ -2,44 +2,56 @@
 
 # ATENTION:
 #
-# To optimize API requests for extended periods (e.g., months or years), divide
-# "large" group variables (such as wave data) into smaller segments to reduce
+# To optimize API requests for extended periods (e.g., month or year), divide
+# "large" group variables (such as ocean wave data) into smaller segments to reduce
 # the size of each request and minimize queue time. For shorter timeframes, like
-# a single hour or day, you can include multiple variables in a single request
+# a hour or day, you can include multiple variables in a single request
 # without issues.
 #
-# Do not put atmospheric and wave variables in the same group, as they have
-# different grid resolutions: 0.25 and 0.5, respectively.
+# DO NOT put ocean wave and non ocean wave variables in the same group, as they have
+# different grid resolutions: 0.5 and 0.25, respectively. If this happens,
+# the server will return multiple files compressed in a zip file.
+# All ocean wave variables are in the tab "Ocean Waves" in the selection page:
+# https://cds.climate.copernicus.eu/datasets/reanalysis-era5-single-levels?tab=download
+# All the other variables are non ocean wave variables.
 
-ocean_static:
-- model_bathymetry
+# -----------------------------------------------------------------------------
+non_ocean_wave_static:
 - land_sea_mask
-
-land_static:
 - geopotential
 - standard_deviation_of_filtered_subgrid_orography   # for Obukhov Length
 
+# -----------------------------------------------------------------------------
+ocean_wave_static:
+- model_bathymetry
+
+# -----------------------------------------------------------------------------
 wind10:
 - 10m_u_component_of_wind
 - 10m_v_component_of_wind
 
+# -----------------------------------------------------------------------------
 wind100:
 - 100m_u_component_of_wind
 - 100m_v_component_of_wind
 
+# -----------------------------------------------------------------------------
 atm_part1:
 - 2m_temperature
 - 2m_dewpoint_temperature
 
+# -----------------------------------------------------------------------------
 atm_part2:
 - mean_sea_level_pressure
 - surface_pressure
 
+# -----------------------------------------------------------------------------
 atm_part3:
 - cloud_base_height
 - total_cloud_cover
 
-# ERA5: How to calculate Obukhov Length
+# -----------------------------------------------------------------------------
+# These variables are needed to calculate Obukhov Length
 # https://confluence.ecmwf.int/display/CKB/ERA5%3A+How+to+calculate+Obukhov+Length
 # surface_pressure
 # 2m_dewpoint_temperature
@@ -58,12 +70,48 @@ atm_part5:
 - instantaneous_moisture_flux
 - instantaneous_surface_sensible_heat_flux
 
+# -----------------------------------------------------------------------------
+# group variable with A LOT of variables. Use only for small (hour/day) requests.
+wave:
+- significant_height_of_combined_wind_waves_and_swell
+- significant_height_of_total_swell
+- significant_height_of_wind_waves
+
+- peak_wave_period
+- mean_wave_period
+- mean_period_of_total_swell
+- mean_period_of_wind_waves
+
+- mean_wave_period_based_on_first_moment
+- mean_wave_period_based_on_first_moment_for_swell
+- mean_wave_period_based_on_first_moment_for_wind_waves
+
+- mean_zero_crossing_wave_period
+- mean_wave_period_based_on_second_moment_for_swell
+- mean_wave_period_based_on_second_moment_for_wind_waves
+
+- mean_wave_direction
+- mean_direction_of_total_swell
+- mean_direction_of_wind_waves
+
+- wave_spectral_directional_width
+- wave_spectral_directional_width_for_swell
+- wave_spectral_directional_width_for_wind_waves
+
+- maximum_individual_wave_height
+- period_corresponding_to_maximum_individual_wave_height
+
+- u_component_stokes_drift
+- v_component_stokes_drift
+
+# -----------------------------------------------------------------------------
 # Hs
 wave_part1:
 - significant_height_of_combined_wind_waves_and_swell
 - significant_height_of_total_swell
 - significant_height_of_wind_waves
 
+# -----------------------------------------------------------------------------
 # Tp and Tm-10
 wave_part2:
 - peak_wave_period
@@ -71,35 +119,41 @@ wave_part2:
 - mean_period_of_total_swell
 - mean_period_of_wind_waves
 
+# -----------------------------------------------------------------------------
 # Tm01
 wave_part3:
 - mean_wave_period_based_on_first_moment
 - mean_wave_period_based_on_first_moment_for_swell
 - mean_wave_period_based_on_first_moment_for_wind_waves
 
+# -----------------------------------------------------------------------------
 # Tm02
 wave_part4:
 - mean_zero_crossing_wave_period
 - mean_wave_period_based_on_second_moment_for_swell
 - mean_wave_period_based_on_second_moment_for_wind_waves
 
+# -----------------------------------------------------------------------------
 # Direction
 wave_part5:
 - mean_wave_direction
 - mean_direction_of_total_swell
 - mean_direction_of_wind_waves
 
+# -----------------------------------------------------------------------------
 # Directional width to calculate spreading
 wave_part6:
 - wave_spectral_directional_width
 - wave_spectral_directional_width_for_swell
 - wave_spectral_directional_width_for_wind_waves
 
+# -----------------------------------------------------------------------------
 # maximum individual wave
 wave_part7:
 - maximum_individual_wave_height
 - period_corresponding_to_maximum_individual_wave_height
 
+# -----------------------------------------------------------------------------
 # Stokes
 wave_part8:
 - u_component_stokes_drift

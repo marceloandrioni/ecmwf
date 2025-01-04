@@ -11,7 +11,7 @@ if [ -z "$1" ]; then
 fi
 gvar="$1"
 
-if false ; then
+if true ; then
     # final dataset with a lag of a few months
     dataset="era5"
     dt_start="19900101"
@@ -29,7 +29,21 @@ extent=(-54 -31 -36 7)
 SCRIPT_DIR="$(dirname "$(readlink -f "$0")")"
 era5_get="$SCRIPT_DIR/ecmwf_era5_get.py"
 
-outdir_base="/u/eani/operational/datasets/ecmwf/$dataset/$region/raw"
+outdir_base="/usr/local/tds/datasets/ecmwf/$dataset/$region/raw"
+
+# get just one hour of non-time varying variables
+for static_var in ocean_wave_static non_ocean_wave_static; do
+
+    outfile="$outdir_base/ecmwf_${dataset}_${static_var}_${region}.nc"
+    [ -s "$outfile" ] && continue
+
+    $era5_get \
+        --group_variable $static_var \
+        --dt_start 19700101 \
+        --time_delta hour \
+        --region_extent ${extent[*]} \
+        --outfile "$outfile"
+done
 
 time_delta="1 month"
 dt="$dt_start"

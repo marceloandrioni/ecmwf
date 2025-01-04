@@ -60,13 +60,26 @@ def random_str(n: int = 8) -> str:
 
 class Outfile:
 
+    # @todo: option to check if the file type is correct using magic or a func, e.g.:
+    #
+    # Outfile(..., check_file="netcdf")
+    #
+    # def my_func(file):
+    #     with xr.open_dataset(file) as ds:
+    #         if len(ds["time"]) < 24:
+    #             raise ValueError()
+    #
+    # Outfile(..., check_file=my_func)
+
     @validate_types_in_func_call
     def __init__(
             self,
+            *,
             path: str | Path,
             overwrite: bool = False,
             use_temporary_file: bool = True,
             delete_temporary_file_on_error: bool = True,
+            mandatory_extension: Annotated[str, Field(pattern=r'^\.[a-zA-Z0-9]+')] | None = None,
     ) -> None:
         """
 
@@ -81,6 +94,11 @@ class Outfile:
         self.overwrite = overwrite
         self.use_temporary_file = use_temporary_file
         self.delete_temporary_file_on_error = delete_temporary_file_on_error
+
+        if mandatory_extension and mandatory_extension != self.path.suffix:
+            raise ValueError(
+                f"File '{self.path}' does not have the mandatory extension '{mandatory_extension}'"
+            )
 
     def __enter__(self) -> Path:
 
@@ -112,11 +130,9 @@ def get_group_variables() -> dict[str, list[str]]:
     represent multiple variables."""
 
     gvars_file = Path(__file__).parent.resolve() / "ecmwf_era5_group_variables.yaml"
-
     with open(gvars_file, "r") as f:
-        gvars = yaml.safe_load(f)
+        return yaml.safe_load(f)
 
-    return gvars
 
 def process_cli_args():
 
@@ -222,6 +238,68 @@ def str_to_list_of_str(value: str) -> list[str]:
     return value
 
 
+def dont_mix_wave_and_non_wave(value: list[str]) -> list[str]:
+
+    # List of all ocean wave variables. These variables are in a 0.5 degree grid.
+    # All others non ocean wave variables are in a 0.25 degree grid. The
+    # request shoud no mix both.
+    ocean_wave_variables: list[str] = [
+        "mean_wave_direction",
+        "mean_wave_period",
+        "significant_height_of_combined_wind_waves_and_swell",
+        "air_density_over_the_oceans",
+        "coefficient_of_drag_with_waves",
+        "free_convective_velocity_over_the_oceans",
+        "maximum_individual_wave_height",
+        "mean_direction_of_total_swell",
+        "mean_direction_of_wind_waves",
+        "mean_period_of_total_swell",
+        "mean_period_of_wind_waves",
+        "mean_square_slope_of_waves",
+        "mean_wave_direction_of_first_swell_partition",
+        "mean_wave_direction_of_second_swell_partition",
+        "mean_wave_direction_of_third_swell_partition",
+        "mean_wave_period_based_on_first_moment",
+        "mean_wave_period_based_on_first_moment_for_swell",
+        "mean_wave_period_based_on_first_moment_for_wind_waves",
+        "mean_wave_period_based_on_second_moment_for_swell",
+        "mean_wave_period_based_on_second_moment_for_wind_waves",
+        "mean_wave_period_of_first_swell_partition",
+        "mean_wave_period_of_second_swell_partition",
+        "mean_wave_period_of_third_swell_partition",
+        "mean_zero_crossing_wave_period",
+        "model_bathymetry",
+        "normalized_energy_flux_into_ocean",
+        "normalized_energy_flux_into_waves",
+        "normalized_stress_into_ocean",
+        "ocean_surface_stress_equivalent_10m_neutral_wind_direction",
+        "ocean_surface_stress_equivalent_10m_neutral_wind_speed",
+        "peak_wave_period",
+        "period_corresponding_to_maximum_individual_wave_height",
+        "significant_height_of_total_swell",
+        "significant_height_of_wind_waves",
+        "significant_wave_height_of_first_swell_partition",
+        "significant_wave_height_of_second_swell_partition",
+        "significant_wave_height_of_third_swell_partition",
+        "wave_spectral_directional_width",
+        "wave_spectral_directional_width_for_swell",
+        "wave_spectral_directional_width_for_wind_waves",
+        "wave_spectral_kurtosis",
+        "wave_spectral_peakedness",
+        "wave_spectral_skewness",
+    ]
+
+    result = [True
+              if v in ocean_wave_variables
+              else False
+              for v in value]
+
+    if all(result) or not any(result):
+        return value
+
+    raise ValueError("There is a mix of ocean wave and non ocean wave variables in the request.")
+
+
 def get_dict_until(d: dict[Any, Any], key: Any) -> dict[Any, Any]:
 
     # raise KeyError if key is not present
@@ -301,7 +379,8 @@ class ERA5:
         *,
         variable: Annotated[
             list[str],
-            BeforeValidator(str_to_list_of_str)
+            BeforeValidator(str_to_list_of_str),
+            AfterValidator(dont_mix_wave_and_non_wave),
         ],
         dt_start: Annotated[
             AwareDatetime,
@@ -411,16 +490,17 @@ class ERA5:
     @validate_types_in_func_call
     def get_data(self, outfile: Path, overwrite: bool) -> None:
 
-        self._check_requested_time_interval()
-
-        request = self.build_request()
-        print(f"Running request: {request}")
-
-        client = cdsapi.Client()
-
         with Outfile(path=outfile,
                      overwrite=overwrite,
-                     delete_temporary_file_on_error=True) as ofile:
+                     delete_temporary_file_on_error=True,
+                     mandatory_extension=".nc") as ofile:
+
+            request = self.build_request()
+            print(f"Running request: {request}")
+
+            self._check_requested_time_interval()
+
+            client = cdsapi.Client()
 
             print(f"Saving data to temporary file {ofile}")
             client.retrieve(self.dataset, request, ofile)
@@ -433,13 +513,15 @@ class ERA5:
 
         d = {
             "0001": "ERA5",   # this is the final version of era5 with lag of a few months
-            "0005": "ERA5T (interim)",   # this is the interim (temporary) version with lag of a few days
+            "0005": "ERA5T (interim)",   # this is the interim (temporary) version of era5 with lag of a few days
         }
 
         with xr.open_dataset(outfile) as ds:
 
+            ds_expver = np.atleast_1d(ds["expver"].values)
+
             for expver, expname in d.items():
-                if all([x == expver for x in ds["expver"].values]):
+                if all([x == expver for x in ds_expver]):
                     return {"expver": expver, "expname": expname}
 
         raise ValueError("Unkown dataset experiment")
