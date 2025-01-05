@@ -11,7 +11,7 @@ if [ -z "$1" ]; then
 fi
 gvar="$1"
 
-if true ; then
+if false ; then
     # final dataset with a lag of a few months
     dataset="era5"
     dt_start="19900101"

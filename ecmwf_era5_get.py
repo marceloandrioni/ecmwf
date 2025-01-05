@@ -121,6 +121,11 @@ class Outfile:
                 self._temp.unlink()
             raise exc_val
 
+        # another process may have created self.path while the with
+        # was being executed, so check again if file exits.
+        if self.path.exists() and not self.overwrite:
+            raise ValueError(f"File {self.path} exists.")
+
         self._temp.rename(self.path)
 
 
@@ -175,9 +180,9 @@ def process_cli_args():
         "--variable",
         nargs="+",
         help=(
-            "Variable(s). ATENTION: do not request atmospheric and wave"
-            " variables simultaneously, as they have different grid"
-            " resolutions: 0.25 and 0.5, respectively."
+            "Variable(s). ATENTION: do not request ocean wave and"
+            " non ocean wave variables simultaneously, as they have"
+            " different grid resolutions: 0.5 and 0.25, respectively."
         )
     )
 
@@ -219,10 +224,6 @@ def process_cli_args():
 
     args = parser.parse_args()
 
-    # convert list to tuple
-    # Note: must be a tuple so pydantic can check all elements individually
-    setattr(args, "region_extent", tuple(args.region_extent))
-
     # if a group variable name was given, store the corresponding list of variables
     if args.group_variable is not None:
         setattr(args, "variable", group_variables[args.group_variable])
@@ -232,7 +233,7 @@ def process_cli_args():
     return args
 
 
-def str_to_list_of_str(value: str) -> list[str]:
+def str_to_list_of_strs(value: str) -> list[str]:
     if isinstance(value, str):
         return [value]
     return value
@@ -371,6 +372,33 @@ def dt_must_be_utc(dt: datetime.datetime) -> datetime.datetime:
     return dt
 
 
+def list_to_tuple(value: Any) -> Any:
+    if isinstance(value, list):
+        return tuple(value)
+    return value
+
+
+def validate_ascending(
+    extent: tuple[float, float, float, float]
+) -> tuple[float, float, float, float]:
+    lon_min, lon_max, lat_min, lat_max = extent
+    assert lon_min <= lon_max, f"{lon_min=} must be <= {lon_max=}"
+    assert lat_min <= lat_max, f"{lat_min=} must be <= {lat_max=}"
+    return extent
+
+
+extent_validator = Annotated[
+    tuple[
+        Annotated[float, Field(ge=-180, le=180)],
+        Annotated[float, Field(ge=-180, le=180)],
+        Annotated[float, Field(ge=-90, le=90)],
+        Annotated[float, Field(ge=-90, le=90)],
+    ],
+    BeforeValidator(list_to_tuple),
+    AfterValidator(validate_ascending),
+]
+
+
 class ERA5:
 
     @validate_types_in_func_call
@@ -379,7 +407,7 @@ class ERA5:
         *,
         variable: Annotated[
             list[str],
-            BeforeValidator(str_to_list_of_str),
+            BeforeValidator(str_to_list_of_strs),
             AfterValidator(dont_mix_wave_and_non_wave),
         ],
         dt_start: Annotated[
@@ -388,12 +416,7 @@ class ERA5:
             AfterValidator(dt_must_be_utc),
         ],
         time_delta: Literal["hour", "day", "month", "year"],
-        extent: tuple[
-            Annotated[float, Field(ge=-180, le=180)],
-            Annotated[float, Field(ge=-180, le=180)],
-            Annotated[float, Field(ge=-90, le=90)],
-            Annotated[float, Field(ge=-90, le=90)],
-        ] | None,
+        extent: extent_validator | None = None,
     ) -> None:
 
         self.dataset = "reanalysis-era5-single-levels"
@@ -540,7 +563,7 @@ def main() -> None:
     # variable = ["10m_u_component_of_wind", "10m_v_component_of_wind"]
     # dt_start = datetime.datetime(2000, 1, 1)
     # time_delta = "month"
-    # extent = (-54, -31, -36, 7)
+    # extent = [-54, -31, -36, 7]
     # outfile = Path(f"/tmp/ecmwf_era5_wind10_{dt_start:%Y%m%d}.nc")
     # overwrite = False
 
