@@ -121,8 +121,8 @@ class Outfile:
                 self._temp.unlink()
             raise exc_val
 
-        # another process may have created self.path while the with
-        # was being executed, so check again if file exits.
+        # another process may have created self.path while the with block was
+        # being executed, so check again if file exits.
         if self.path.exists() and not self.overwrite:
             raise ValueError(f"File {self.path} exists.")
 
@@ -220,6 +220,12 @@ def process_cli_args():
         "--overwrite",
         action="store_true",
         help="Overwrite outfile if exists.",
+    )
+
+    parser.add_argument(
+        "--experiment",
+        choices=["ERA5", "ERA5T"],
+        help="Raise an error if the downloaded file is different from the chosen experiment.",
     )
 
     args = parser.parse_args()
@@ -372,10 +378,8 @@ def dt_must_be_utc(dt: datetime.datetime) -> datetime.datetime:
     return dt
 
 
-def list_to_tuple(value: Any) -> Any:
-    if isinstance(value, list):
-        return tuple(value)
-    return value
+def any_to_tuple(value: Any) -> Any:
+    return tuple(value)
 
 
 def validate_ascending(
@@ -394,7 +398,7 @@ extent_validator = Annotated[
         Annotated[float, Field(ge=-90, le=90)],
         Annotated[float, Field(ge=-90, le=90)],
     ],
-    BeforeValidator(list_to_tuple),
+    BeforeValidator(any_to_tuple),
     AfterValidator(validate_ascending),
 ]
 
@@ -511,7 +515,12 @@ class ERA5:
             raise ValueError(err_msg)
 
     @validate_types_in_func_call
-    def get_data(self, outfile: Path, overwrite: bool) -> None:
+    def get_data(
+        self,
+        outfile: Path,
+        overwrite: bool,
+        experiment: Literal["ERA5", "ERA5T"] | None,
+        ) -> None:
 
         with Outfile(path=outfile,
                      overwrite=overwrite,
@@ -528,24 +537,30 @@ class ERA5:
             print(f"Saving data to temporary file {ofile}")
             client.retrieve(self.dataset, request, ofile)
 
-            experiment = self.get_experiment_version(ofile)
-            print(experiment)
+            # check if the downloaded file is of the requested experiment (ERA5 or ERA5T)
+            if experiment is not None:
+                downloaded_experiment = self.get_experiment_version(ofile)["expname"]
+                if experiment != downloaded_experiment:
+                    raise ValueError(
+                        f"The user requeted experiment '{experiment}', but the"
+                        f" downloaded file is of experiment '{downloaded_experiment}'"
+                    )
+
 
     @validate_types_in_func_call
     def get_experiment_version(self, outfile: Path) -> dict[str, str]:
-
-        d = {
-            "0001": "ERA5",   # this is the final version of era5 with lag of a few months
-            "0005": "ERA5T (interim)",   # this is the interim (temporary) version of era5 with lag of a few days
-        }
 
         with xr.open_dataset(outfile) as ds:
 
             ds_expver = np.atleast_1d(ds["expver"].values)
 
-            for expver, expname in d.items():
-                if all([x == expver for x in ds_expver]):
-                    return {"expver": expver, "expname": expname}
+            # this is the final version of era5 with lag of a few months
+            if set(ds_expver) == {"0001"}:
+                return {"expver": "0001", "expname": "ERA5"}
+
+            # this is the interim (temporary) version of era5 with lag of a few days
+            if set(ds_expver) == {"0005"} or set(ds_expver) == {"0001", "0005"}:
+                return {"expver": "0005", "expname": "ERA5T"}
 
         raise ValueError("Unkown dataset experiment")
 
@@ -559,6 +574,7 @@ def main() -> None:
     extent = args.region_extent
     outfile = args.outfile
     overwrite = args.overwrite
+    experiment = args.experiment
 
     # variable = ["10m_u_component_of_wind", "10m_v_component_of_wind"]
     # dt_start = datetime.datetime(2000, 1, 1)
@@ -566,6 +582,7 @@ def main() -> None:
     # extent = [-54, -31, -36, 7]
     # outfile = Path(f"/tmp/ecmwf_era5_wind10_{dt_start:%Y%m%d}.nc")
     # overwrite = False
+    # experiment = "final"
 
     era5 = ERA5(
         variable=variable,
@@ -574,7 +591,7 @@ def main() -> None:
         extent=extent,
     )
 
-    era5.get_data(outfile, overwrite)
+    era5.get_data(outfile, overwrite, experiment)
 
 
 if __name__ == "__main__":

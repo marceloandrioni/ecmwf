@@ -11,16 +11,22 @@ if [ -z "$1" ]; then
 fi
 gvar="$1"
 
-if false ; then
+if true ; then
     # final dataset with a lag of a few months
     dataset="era5"
     dt_start="19900101"
-    dt_stop="20231231"
+    dt_stop="20241231"
+
+    # this will raise an error if the downloaded file is not from experiment ERA5
+    extra_args="--experiment ERA5"
 else
     # interim dataset with lag of a few days
     dataset="era5t"
     dt_start="20240101"
-    dt_stop="20241130"
+    dt_stop="20250228"
+
+    # this will accept a downloaded file from experiments ERA5 or ERA5T
+    extra_args=""
 fi
 
 region="bra"
@@ -69,7 +75,8 @@ while [[ $dt -le $dt_stop ]]; do
             --dt_start $dt \
             --time_delta month \
             --region_extent ${extent[*]} \
-            --outfile "$outfile"
+            --outfile "$outfile" \
+            $extra_args
 
         status=$?
         if [[ "$status" -eq 0 ]]; then
