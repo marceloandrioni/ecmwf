@@ -22,7 +22,7 @@ if true ; then
 else
     # interim dataset with lag of a few days
     dataset="era5t"
-    dt_start="20240101"
+    dt_start="20250101"
     dt_stop="20250228"
 
     # this will accept a downloaded file from experiments ERA5 or ERA5T

@@ -447,12 +447,12 @@ class ERA5:
             case "month":
                 dt_must_be_YYYYmm01_000000(self.dt_start)
                 hour = list(range(24))
-                day = list(range(1, 31))   # NOT a problem for months with 28,29,30 days
+                day = list(range(1, 32))   # NOT a problem for months with 28,29,30 days
 
             case "year":
                 dt_must_be_YYYY0101_000000(self.dt_start)
                 hour = list(range(24))
-                day = list(range(1, 31))   # NOT a problem for months with 28,29,30 days
+                day = list(range(1, 32))   # NOT a problem for months with 28,29,30 days
                 month = list(range(1, 13))
 
             case _:
